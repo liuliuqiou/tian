@@ -1,10 +1,10 @@
 #!/bin/bash
 
-uuid=ffffffff-ffff-ffff-ffff-ffffffffffff
-path=Haoba!2053
-
 # 提示用户输入Domain Name
 read -p "请输入 Domain Name（例如example.com）: " domain
+
+# 生成随机的path
+path="Haoba!2053"
 
 # 安装Caddy
 curl https://getcaddy.com | bash -s personal tls.dns.cloudflare
@@ -43,7 +43,7 @@ cat > /usr/local/etc/xray/config.json << EOF
             "settings": {
                 "clients": [
                     {
-                        "id": "$uuid",
+                        "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
                         "flow": "xtls-rprx-direct",
                         "level": 0
                     }
@@ -73,7 +73,7 @@ systemctl enable xray
 systemctl start xray
 
 # 显示VLESS URL
-echo "VLESS URL: vless://$uuid@$domain:443?encryption=none&security=tls&sni=$domain&type=ws&path=/$path#VLESS-WebSocket"
+echo "VLESS URL: vless://ffffffff-ffff-ffff-ffff-ffffffffffff@$domain:443?encryption=none&security=tls&sni=$domain&type=ws&path=/$path#VLESS-WebSocket"
 
 # 删除脚本文件
 rm -- "$0"
