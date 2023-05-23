@@ -1,99 +1,65 @@
-bash
 #!/bin/bash
 
-read -p "请输入你的域名(domain):" domain
+uuid=aff4fc35-d91a-4aed-8a22-6540d356e738
+read -p "Domain? >" domain
+## update system
+apt update -y 
 
-# 安装必要的软件
-apt update
-apt install -y unzip curl wget
+## install curl wget unzip git 
+apt install curl wget unzip debian-keyring debian-archive-keyring apt-transport-https gnupg -y
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt update -y
+apt install caddy nano -y
 
-# 下载并安装Xray
-wget https://github.com/XTLS/Xray-install/releases/latest/download/Xray-install.sh
-bash Xray-install.sh
-
-# 安装Caddy
-wget https://caddyserver.com/v2/download/linux/amd64?license=personal
-mv caddy_v2_linux_amd64 /usr/bin/caddy
-
-# 创建Caddy配置文件 
-cat > /etc/caddy/Caddyfile <<EOF
-$domain {
-    reverse_proxy 127.0.0.1:9000
-}
-EOF
-
-# 生成Xray配置文件
-cat > /etc/Xray/config.json <<EOF
+# install xray
+bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
+cat > /usr/local/etc/xray/config.json << EOF
 {
-  "log": {
-    "access": "/var/log/xray/access.log",
-    "error": "/var/log/xray/error.log",
-    "loglevel": "warning"
-  },
-  "inbounds": [
-    {
-      "port": 443,
-      "protocol": "vless",
-      "settings": {
-        "clients": [
-          {
-            "id": "ffffffff-ffff-ffff-ffff-ffffffffffff"
-          }
-        ],
-        "decryption": "none", 
-        "fallbacks": [
-           {
-              "dest": 80,
-              "xver": 1
-           }
-        ]
-      },
-      "streamSettings": {
-        "network": "ws",
-        "wsSettings": {
-          "path": "Haoba!2053"
+    "log": {
+        "loglevel": "warning"
+    },
+    "inbounds": [
+        {
+            "port": 1325,
+            "listen": "127.0.0.1",
+            "protocol": "vless",
+            "settings": {
+                "clients": [
+                    {
+                        "id": "$uuid", //UUID
+                        "level": 0,
+                        "email": "fck_v@dyns.tk"
+                    }
+                ],
+                "decryption": "none"
+            },
+            "streamSettings": {
+                "network": "ws",
+                "security": "none",
+                "wsSettings": {
+                    "path": "/up2ws" 
+                }
+            }
         }
-      }
-    }
-  ],
-  "outbounds": [
-    {
-      "protocol": "freedom",
-      "settings": {}
-    }
-  ] 
+    ],
+    "outbounds": [
+        {
+            "protocol": "freedom"
+        }
+    ]
 }
 EOF
+cat > /etc/caddy/Caddyfile << EOF
 
-# 设置Xray开机启动
-cat > /etc/systemd/system/xray.service <<EOF
-[Unit]
-Description=Xray Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
-NoNewPrivileges=true
-ExecStart=/usr/bin/xray/xray run -confdir /etc/Xray
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
+http://$domain {
+        root * /usr/share/caddy
+        file_server
+        reverse_proxy /up2ws 127.0.0.1:1325
+}
 EOF
-systemctl daemon-reload
-systemctl enable xray
-
-# 启动Caddy和Xray服务
-systemctl start caddy
-systemctl start xray
-
-# 获取vless的url
-vless_url=vless://$(echo -n '{"id": "ffffffff-ffff-ffff-ffff-ffffffffffff", "host": "'$domain'", "port": 443,"net":"ws", "path":"Haoba!2053", "encryption":"none", "security": "tls"}' | base64 -w 0)
-
-# 输出vless的url 
-echo "Xray+VLESS服务已成功部署!"  
-echo "请使用以下VLESS URL配置您的客户端:"
-echo ""$vless_url""
+systemctl reload caddy
+systemctl enable xray --now
+clear
+echo "vless://$uuid@$domain:443?encryption=none&security=tls&sni=$domain&type=ws&host=$domain&path=%2fup2ws#Vless+WS"
+rm -f $0
