@@ -1,79 +1,73 @@
 #!/bin/bash
 
-# 提示用户输入Domain Name
-read -p "请输入 Domain Name（例如example.com）: " domain
+echo "Please enter your domain name:"
+read domain
 
-# 生成随机的path
-path="Haoba!2053"
+echo "Please enter your UUID:"
+read uuid
 
-# 安装Caddy
-curl https://getcaddy.com | bash -s personal tls.dns.cloudflare
+echo "Deploying Xray+caddy+tls+websocket+vless..."
 
-# 生成Caddy配置文件
-cat > /etc/caddy/Caddyfile << EOF
-{
-    email fck_v@dyns.tk
-}
+cat > Procfile <<EOF
+web: /app/.apt/usr/bin/caddy run --config /app/Caddyfile
+EOF
 
+cat > Caddyfile <<EOF
 $domain {
-    tls {
-        dns cloudflare
-    }
-    encode gzip
-
-    reverse_proxy /$path 127.0.0.1:443 {
-        header_upstream -Origin
-    }
+  tls {
+    dns cloudflare
+  }
+  reverse_proxy /Haoba!2053 localhost:10086 {
+    header_up Host {host}
+    header_up X-Real-IP {remote}
+    header_up X-Forwarded-For {remote}
+    header_up X-Forwarded-Port {server_port}
+    header_up X-Forwarded-Proto {scheme}
+  }
 }
+
 EOF
 
-# 安装Xray
-bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install -u root
-
-# 生成Xray配置文件
-cat > /usr/local/etc/xray/config.json << EOF
+cat > config.json <<EOF
 {
-    "log": {
-        "loglevel": "warning"
-    },
-    "inbounds": [
-        {
-            "port": 443,
-            "protocol": "vless",
-            "settings": {
-                "clients": [
-                    {
-                        "id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
-                        "flow": "xtls-rprx-direct",
-                        "level": 0
-                    }
-                ],
-                "decryption": "none"
-            },
-            "streamSettings": {
-                "network": "ws",
-                "wsSettings": {
-                    "path": "/$path"
-                }
-            }
+  "inbounds": [
+    {
+      "port": 10086,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "$uuid",
+            "flow": "xtls-rprx-direct"
+          }
+        ],
+        "decryption": "none",
+        "fallbacks": [
+          {
+            "dest": 80,
+            "xver": 1
+          },
+          {
+            "path": "/Haoba!2053",
+            "dest": 10086,
+            "xver": 0
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/Haoba!2053"
         }
-    ],
-    "outbounds": [
-        {
-            "protocol": "freedom"
-        }
-    ]
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ]
 }
 EOF
 
-# 启动Caddy和Xray服务
-systemctl enable caddy
-systemctl start caddy
-systemctl enable xray
-systemctl start xray
-
-# 显示VLESS URL
-echo "VLESS URL: vless://ffffffff-ffff-ffff-ffff-ffffffffffff@$domain:443?encryption=none&security=tls&sni=$domain&type=ws&path=/$path#VLESS-WebSocket"
-
-# 删除脚本文件
-rm -- "$0"
+echo -e "\nDone!"
