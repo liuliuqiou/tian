@@ -1,6 +1,6 @@
 #!/bin/bash
 
-uuid=aff4fc35-d91a-4aed-8a22-6540d356e738
+uuid=ffffffff-ffff-ffff-ffff-ffffffffffff
 read -p "Domain? >" domain
 ## update system
 apt update -y 
@@ -38,7 +38,7 @@ cat > /usr/local/etc/xray/config.json << EOF
                 "network": "ws",
                 "security": "none",
                 "wsSettings": {
-                    "path": "/up2ws" 
+                    "path": "/Haoba!2053" 
                 }
             }
         }
