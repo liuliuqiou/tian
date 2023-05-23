@@ -1,73 +1,99 @@
+bash
 #!/bin/bash
 
-echo "Please enter your domain name:"
-read domain
+read -p "请输入你的域名(domain):" domain
 
-echo "Please enter your UUID:"
-read uuid
+# 安装必要的软件
+apt update
+apt install -y unzip curl wget
 
-echo "Deploying Xray+caddy+tls+websocket+vless..."
+# 下载并安装Xray
+wget https://github.com/XTLS/Xray-install/releases/latest/download/Xray-install.sh
+bash Xray-install.sh
 
-cat > Procfile <<EOF
-web: /app/.apt/usr/bin/caddy run --config /app/Caddyfile
-EOF
+# 安装Caddy
+wget https://caddyserver.com/v2/download/linux/amd64?license=personal
+mv caddy_v2_linux_amd64 /usr/bin/caddy
 
-cat > Caddyfile <<EOF
+# 创建Caddy配置文件 
+cat > /etc/caddy/Caddyfile <<EOF
 $domain {
-  tls {
-    dns cloudflare
-  }
-  reverse_proxy /Haoba!2053 localhost:10086 {
-    header_up Host {host}
-    header_up X-Real-IP {remote}
-    header_up X-Forwarded-For {remote}
-    header_up X-Forwarded-Port {server_port}
-    header_up X-Forwarded-Proto {scheme}
-  }
+    reverse_proxy 127.0.0.1:9000
 }
-
 EOF
 
-cat > config.json <<EOF
+# 生成Xray配置文件
+cat > /etc/Xray/config.json <<EOF
 {
+  "log": {
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "loglevel": "warning"
+  },
   "inbounds": [
     {
-      "port": 10086,
+      "port": 443,
       "protocol": "vless",
       "settings": {
         "clients": [
           {
-            "id": "$uuid",
-            "flow": "xtls-rprx-direct"
+            "id": "ffffffff-ffff-ffff-ffff-ffffffffffff"
           }
         ],
-        "decryption": "none",
+        "decryption": "none", 
         "fallbacks": [
-          {
-            "dest": 80,
-            "xver": 1
-          },
-          {
-            "path": "/Haoba!2053",
-            "dest": 10086,
-            "xver": 0
-          }
+           {
+              "dest": 80,
+              "xver": 1
+           }
         ]
       },
       "streamSettings": {
         "network": "ws",
         "wsSettings": {
-          "path": "/Haoba!2053"
+          "path": "Haoba!2053"
         }
       }
     }
   ],
   "outbounds": [
     {
-      "protocol": "freedom"
+      "protocol": "freedom",
+      "settings": {}
     }
-  ]
+  ] 
 }
 EOF
 
-echo -e "\nDone!"
+# 设置Xray开机启动
+cat > /etc/systemd/system/xray.service <<EOF
+[Unit]
+Description=Xray Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ExecStart=/usr/bin/xray/xray run -confdir /etc/Xray
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable xray
+
+# 启动Caddy和Xray服务
+systemctl start caddy
+systemctl start xray
+
+# 获取vless的url
+vless_url=vless://$(echo -n '{"id": "ffffffff-ffff-ffff-ffff-ffffffffffff", "host": "'$domain'", "port": 443,"net":"ws", "path":"Haoba!2053", "encryption":"none", "security": "tls"}' | base64 -w 0)
+
+# 输出vless的url 
+echo "Xray+VLESS服务已成功部署!"  
+echo "请使用以下VLESS URL配置您的客户端:"
+echo ""$vless_url""
